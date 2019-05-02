@@ -61,6 +61,14 @@ func Int(i int, err error) int {
 	return i
 }
 
+// Float64 expects a value and an error.
+// If err is not nil, the function will panic.
+// Otherwise the value is returned,
+func Float64(f float64, err error) float64 {
+	Err(err)
+	return f
+}
+
 // String expects a value and an error.
 // If err is not nil, the function will panic.
 // Otherwise the value is returned,
