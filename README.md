@@ -3,6 +3,7 @@ go-check
 
 `go get github.com/eltorocorp/go-check`
 
+
 Example
 =======
 Here's a block of code with conventional go error handling
@@ -56,8 +57,70 @@ func (a *API) CalculateContributorScore(user usercontextiface.UserContextAPI, co
     return
 }
 ```
-
 How it Works
 ============
 Helper functions (such as `check.Float64`) are wrapped around functions that return a value and an error. These helper functions panic if the error is not nil, and otherwise return value.
 `check.Trap` in turn, traps the panic caused by the helper function, retrieves the error that caused the panic, and returns the error.
+
+Transaction Handling
+====================
+`check` can also be used to simplify database transaction handling in line with err handling.
+
+This is done with the use of `check.TrapTx`, which is similar to `check.Trap`, but also manages a transaction within the same context as any errors.
+
+Here is an example of a database transaction and errors being handled conventionally:
+
+```go
+func (c *Context) ExpireSessions() error {
+	if c.SessionToken() == "" {
+		return nil
+	}
+
+	tx, err := c.db.Begin()
+	if err != nil {
+		return err
+	}
+
+	sessions, err := models.GetAllSessions(tx)
+	if err != nil {
+		return err
+	}
+	for _, session := range sessions {
+		if session.PersonID == c.UserID() {
+			err = session.Delete(tx)
+			if err != nil {
+				log.Println(err)
+				err = tx.Rollback()
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return tx.Commit()
+}
+```
+
+Here is the same code, but rewritten with `check.TrapTx`:
+
+
+```go
+func (c *Context) ExpireSessions() error {
+    return check.TrapTx(check.UseDB(c.DB), func(tx check.Tx) {
+        if c.SessionToken() == "" {
+            return
+        }
+
+        sessions:= check.IFace(models.GetAllSessions(tx)).([]*models.Session)
+        for _, session := range sessions {
+            if session.PersonID == c.UserID() {
+                check.Err(session.Delete(tx))
+            }
+        }
+    })
+}
+```
+
+How it Works
+============
+In this case, a database reference is passed into `check.TrapTx`. Internally, `check` will create a transaction for the underlaying database. That transaction is then passed into the closure supplied to `TrapFx`. If any errors occur within the closure, the helper functions (such as `check.Err`) will panic. `check` will then recover from the panic, and automatically rollback the transaction. If the closure returns without any panicks, `check` will automatically commit the transaction.
