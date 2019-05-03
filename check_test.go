@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/eltorocorp/go-check"
+	"github.com/eltorocorp/go-check/mocks/mock_check"
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -59,6 +61,58 @@ func Test_CheckTrap(t *testing.T) {
 				} else {
 					assert.EqualError(t, err, testCase.expectedErr.Error())
 				}
+			}
+		}
+		t.Run(testCase.name, testFn)
+	}
+}
+
+func Test_CheckTrapTx(t *testing.T) {
+	testCases := []struct {
+		name        string
+		closure     func(check.Tx)
+		expRollback bool
+		expCommit   bool
+		expErr      error
+	}{
+		{
+			name:        "transaction is committed",
+			closure:     func(tx check.Tx) {},
+			expRollback: false,
+			expCommit:   true,
+			expErr:      nil,
+		},
+		{
+			name:        "transaction is rolled back",
+			closure:     func(tx check.Tx) { panic(errors.New("test error"))},
+			expRollback: true,
+			expCommit:   false,
+			expErr:      errors.New("test error"),
+		},
+	}
+
+	for _, testCase := range testCases {
+		testFn := func(t *testing.T) {
+			mc := gomock.NewController(t)
+			defer mc.Finish()
+
+			tx := mock_check.NewMockTx(mc)
+			if testCase.expCommit {
+				tx.EXPECT().Commit().Return(nil).Times(1)
+				tx.EXPECT().Rollback().Times(0)
+			}
+			if testCase.expRollback {
+				tx.EXPECT().Commit().Times(0)
+				tx.EXPECT().Rollback().Return(nil).Times(1)
+			}
+
+			txProvider := mock_check.NewMockTxProvider(mc)
+			txProvider.EXPECT().Begin().Return(tx, nil)
+			err := check.TrapTx(txProvider, testCase.closure)
+			if testCase.expErr == nil {
+				assert.NoError(t, err)
+			} else {
+				assert.EqualError(t, err, testCase.expErr.Error())
 			}
 		}
 		t.Run(testCase.name, testFn)
