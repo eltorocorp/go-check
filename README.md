@@ -57,6 +57,9 @@ func (a *API) CalculateContributorScore(user usercontextiface.UserContextAPI, co
     return
 }
 ```
+
+Notice how the overall intent of the code is now much more clear since all of the transaction and error handling noise has been abstracted away.
+
 How it Works
 ============
 Helper functions (such as `check.Float64`) are wrapped around functions that return a value and an error. These helper functions panic if the error is not nil, and otherwise return value.
@@ -120,6 +123,8 @@ func (c *Context) ExpireSessions() error {
     })
 }
 ```
+
+Just as in the `check.Trap` example, notice how the overall intent of the code is now much more clear since all of the transaction and error handling noise has been abstracted away.
 
 How it Works
 ============
