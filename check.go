@@ -38,7 +38,7 @@ func TrapTx(txProvider TxProvider, fn func(Tx)) (err error) {
 
 	tx, err = txProvider.Begin()
 	if err != nil {
-		return err
+		panic(err)
 	}
 
 	fn(tx)
