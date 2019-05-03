@@ -72,6 +72,8 @@ func Test_CheckTrapTx(t *testing.T) {
 		name        string
 		txProviderErr error
 		closure     func(check.Tx)
+		commitErr error
+		rollbackErr error
 		expRollback bool
 		expCommit   bool
 		expErr      error
@@ -80,6 +82,8 @@ func Test_CheckTrapTx(t *testing.T) {
 			name:        "transaction is committed",
 			txProviderErr: nil,
 			closure:     func(tx check.Tx) {},
+			commitErr: nil,
+			rollbackErr: nil,
 			expRollback: false,
 			expCommit:   true,
 			expErr:      nil,
@@ -88,6 +92,8 @@ func Test_CheckTrapTx(t *testing.T) {
 			name:        "transaction is rolled back",
 			txProviderErr: nil,
 			closure:     func(tx check.Tx) { panic(errors.New("test error"))},
+			commitErr: nil,
+			rollbackErr: nil,
 			expRollback: true,
 			expCommit:   false,
 			expErr:      errors.New("test error"),
@@ -96,9 +102,34 @@ func Test_CheckTrapTx(t *testing.T) {
 			name:        "txProvider error is propogated without calling closure",
 			txProviderErr: errors.New("test error"),
 			closure:     func(tx check.Tx) { panic(errors.New("this shouldnt get called"))},
+			commitErr: nil,
+			rollbackErr: nil,
 			expRollback: false,
 			expCommit:   false,
 			expErr:      errors.New("test error"),
+		},
+		{
+			name:        "commit error is propogated",
+			txProviderErr: nil,
+			closure:     func(tx check.Tx) { },
+			commitErr: errors.New("test error"),
+			rollbackErr: nil,
+			expRollback: false,
+			expCommit:   true,
+			expErr:      errors.New("test error"),
+		},
+		{
+			// If an error occurs during a rollback, we want to make sure that
+			// the original error (the error that required the rollback) is
+			// not lost.
+			name:        "rollback error includes original error",
+			txProviderErr: nil,
+			closure:     func(tx check.Tx) { panic(errors.New("original error"))},
+			commitErr: nil,
+			rollbackErr: errors.New("rollback error"),
+			expRollback: true,
+			expCommit:   false,
+			expErr:      errors.New("rollback error\noriginal error"),
 		},
 	}
 
@@ -113,12 +144,12 @@ func Test_CheckTrapTx(t *testing.T) {
 			} else {
 				tx := mock_check.NewMockTx(mc)
 				if testCase.expCommit {
-					tx.EXPECT().Commit().Return(nil).Times(1)
+					tx.EXPECT().Commit().Return(testCase.commitErr).Times(1)
 					tx.EXPECT().Rollback().Times(0)
 				}
 				if testCase.expRollback {
 					tx.EXPECT().Commit().Times(0)
-					tx.EXPECT().Rollback().Return(nil).Times(1)
+					tx.EXPECT().Rollback().Return(testCase.rollbackErr).Times(1)
 				}
 				txProvider.EXPECT().Begin().Return(tx, nil)
 			}

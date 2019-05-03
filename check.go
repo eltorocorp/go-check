@@ -1,5 +1,9 @@
 package check
 
+import (
+	"fmt"
+)
+
 // Trap executes fn and attempts to recover if fn panics.
 // If fn supplied an error type when panicking, trap will cancel the panic and
 // return the original error.
@@ -26,11 +30,15 @@ func TrapTx(txProvider TxProvider, fn func(Tx)) (err error) {
 			err = tx.Commit()
 			return
 		}
+		var rollbackErr error
 		if tx != nil {
-			tx.Rollback()
+			rollbackErr = tx.Rollback()
 		}
 		if e, ok := p.(error); ok {
 			err = e
+			if rollbackErr != nil {
+				err = fmt.Errorf("%v\n%v", rollbackErr, err)
+			}
 		} else {
 			panic(p)
 		}
